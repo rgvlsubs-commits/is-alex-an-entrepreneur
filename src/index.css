@@ -301,6 +301,24 @@ tbody tr:hover {
   font-weight: 600;
 }
 
+.revenue.positive {
+  color: #34a853;
+}
+
+.bitcoin-row {
+  background: rgba(247, 147, 26, 0.1);
+}
+
+.bitcoin-row:hover {
+  background: rgba(247, 147, 26, 0.15) !important;
+}
+
+.btc-info {
+  font-size: 0.75rem;
+  color: #f7931a;
+  margin-left: 8px;
+}
+
 .expenses {
   color: #888;
   font-style: italic;

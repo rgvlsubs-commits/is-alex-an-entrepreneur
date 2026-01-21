@@ -7,6 +7,11 @@ const START_DATE = '2023-01-01'
 // Google stock price on Jan 1, 2023 (adjusted close)
 const GOOGLE_START_PRICE = 88.73
 
+// Bitcoin investment details
+const BTC_INVESTMENT = 1000
+const BTC_INVESTMENT_DATE = '2025-08-15'
+const BTC_PRICE_AUG_2025 = 59000 // Approximate BTC price on Aug 15, 2025
+
 const initialVentures = [
   { id: 1, name: 'Rarely open coffee cart', revenue: 0, expenses: 'Time wasted' },
   { id: 2, name: 'Questionably exploitative house cleaning service', revenue: 0, expenses: 'Online training course' },
@@ -15,14 +20,25 @@ const initialVentures = [
   { id: 5, name: 'CRE Cleaning Franchise (also maybe exploitative)', revenue: 0, expenses: 'Time wasted' },
   { id: 6, name: 'Alarm and security company', revenue: 0, expenses: 'Time wasted' },
   { id: 7, name: 'Wilmington-based landscaping', revenue: 0, expenses: 'Time wasted' },
+  { id: 8, name: 'Bitcoin Investor', revenue: 0, expenses: '$1,000', isBitcoin: true },
 ]
 
 function App() {
   const [ventures, setVentures] = useState(() => {
-    const saved = localStorage.getItem('alexVentures')
-    return saved ? JSON.parse(saved) : initialVentures
+    const saved = localStorage.getItem('alexVentures_v2')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      // Ensure Bitcoin venture exists
+      if (!parsed.find(v => v.isBitcoin)) {
+        parsed.push({ id: 8, name: 'Bitcoin Investor', revenue: 0, expenses: '$1,000', isBitcoin: true })
+      }
+      return parsed
+    }
+    return initialVentures
   })
   const [googlePrice, setGooglePrice] = useState(null)
+  const [bitcoinPrice, setBitcoinPrice] = useState(null)
+  const [bitcoinValue, setBitcoinValue] = useState(null)
   const [googleHistory, setGoogleHistory] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -31,13 +47,49 @@ function App() {
 
   // Save ventures to localStorage
   useEffect(() => {
-    localStorage.setItem('alexVentures', JSON.stringify(ventures))
+    localStorage.setItem('alexVentures_v2', JSON.stringify(ventures))
   }, [ventures])
 
-  // Fetch Google stock data
+  // Fetch Google stock and Bitcoin data
   useEffect(() => {
     fetchGoogleStock()
+    fetchBitcoinPrice()
   }, [])
+
+  // Update Bitcoin venture when price changes
+  useEffect(() => {
+    if (bitcoinValue !== null) {
+      setVentures(prev => prev.map(v =>
+        v.isBitcoin ? { ...v, revenue: Math.round(bitcoinValue - BTC_INVESTMENT) } : v
+      ))
+    }
+  }, [bitcoinValue])
+
+  const fetchBitcoinPrice = async () => {
+    try {
+      // Fetch current Bitcoin price from CoinGecko
+      const response = await fetch(
+        'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd'
+      )
+      if (!response.ok) throw new Error('Failed to fetch Bitcoin price')
+
+      const data = await response.json()
+      const currentPrice = data.bitcoin.usd
+      setBitcoinPrice(currentPrice)
+
+      // Calculate current value of $1000 invested at BTC_PRICE_AUG_2025
+      const btcAmount = BTC_INVESTMENT / BTC_PRICE_AUG_2025
+      const currentValue = btcAmount * currentPrice
+      setBitcoinValue(currentValue)
+    } catch (err) {
+      console.error('Error fetching Bitcoin price:', err)
+      // Fallback estimate
+      const estimatedPrice = 105000
+      setBitcoinPrice(estimatedPrice)
+      const btcAmount = BTC_INVESTMENT / BTC_PRICE_AUG_2025
+      setBitcoinValue(btcAmount * estimatedPrice)
+    }
+  }
 
   const fetchGoogleStock = async () => {
     setLoading(true)
@@ -115,10 +167,27 @@ function App() {
     }
   }
 
-  const totalRevenue = ventures.reduce((sum, v) => sum + (parseFloat(v.revenue) || 0), 0)
+  // Calculate total revenue (Bitcoin revenue is profit, not total value)
+  const totalRevenue = ventures.reduce((sum, v) => {
+    if (v.isBitcoin) {
+      // For Bitcoin, revenue is already the profit (value - investment)
+      return sum + (parseFloat(v.revenue) || 0)
+    }
+    return sum + (parseFloat(v.revenue) || 0)
+  }, 0)
+
   const shares = INITIAL_INVESTMENT / GOOGLE_START_PRICE
   const currentStockValue = googlePrice ? Math.round(shares * googlePrice) : null
   const stockGain = currentStockValue ? currentStockValue - INITIAL_INVESTMENT : null
+
+  // Format Bitcoin revenue for display
+  const getBitcoinRevenueDisplay = (venture) => {
+    if (!venture.isBitcoin) return `$${(parseFloat(venture.revenue) || 0).toLocaleString()}`
+    if (bitcoinValue === null) return '...'
+    const profit = Math.round(bitcoinValue - BTC_INVESTMENT)
+    const prefix = profit >= 0 ? '+' : ''
+    return `${prefix}$${profit.toLocaleString()}`
+  }
 
   const addVenture = () => {
     if (!newVenture.name.trim()) return
@@ -259,12 +328,21 @@ function App() {
             </thead>
             <tbody>
               {ventures.map(venture => (
-                <tr key={venture.id}>
-                  <td className="venture-name">{venture.name}</td>
-                  <td className="revenue">${(parseFloat(venture.revenue) || 0).toLocaleString()}</td>
+                <tr key={venture.id} className={venture.isBitcoin ? 'bitcoin-row' : ''}>
+                  <td className="venture-name">
+                    {venture.name}
+                    {venture.isBitcoin && bitcoinPrice && (
+                      <span className="btc-info"> (BTC @ ${bitcoinPrice.toLocaleString()})</span>
+                    )}
+                  </td>
+                  <td className={`revenue ${venture.isBitcoin && venture.revenue >= 0 ? 'positive' : ''}`}>
+                    {getBitcoinRevenueDisplay(venture)}
+                  </td>
                   <td className="expenses">{venture.expenses}</td>
                   <td className="actions">
-                    <button className="delete-btn" onClick={() => deleteVenture(venture.id)}>×</button>
+                    {!venture.isBitcoin && (
+                      <button className="delete-btn" onClick={() => deleteVenture(venture.id)}>×</button>
+                    )}
                   </td>
                 </tr>
               ))}
