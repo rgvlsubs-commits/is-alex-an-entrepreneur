@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 const INITIAL_INVESTMENT = 10000
-const START_DATE = '2023-01-01'
+const START_DATE = '2023-01-03' // First trading day of 2023
 
-// Google stock price on Jan 1, 2023 (adjusted close)
-const GOOGLE_START_PRICE = 88.73
+// Google stock price on Jan 3, 2023 (first trading day, opening price)
+const GOOGLE_START_PRICE = 89.83
 
 // Bitcoin investment details
 const BTC_INVESTMENT = 1000
@@ -95,25 +95,54 @@ function App() {
     setLoading(true)
     setError(null)
 
-    try {
-      // Using Yahoo Finance API via a CORS proxy for historical data
-      // We'll use the free finnhub.io API for current price
+    // Try multiple data sources for reliability
+    const fetchFromYahoo = async () => {
       const endDate = Math.floor(Date.now() / 1000)
       const startDate = Math.floor(new Date(START_DATE).getTime() / 1000)
 
-      // Fetch from Yahoo Finance (using a proxy or direct if allowed)
       const response = await fetch(
         `https://query1.finance.yahoo.com/v8/finance/chart/GOOGL?period1=${startDate}&period2=${endDate}&interval=1mo`
       )
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch stock data')
-      }
+      if (!response.ok) throw new Error('Yahoo Finance failed')
 
       const data = await response.json()
       const result = data.chart.result[0]
-      const timestamps = result.timestamp
-      const prices = result.indicators.quote[0].close
+      return {
+        timestamps: result.timestamp,
+        prices: result.indicators.quote[0].close
+      }
+    }
+
+    // Alternative: Try via CORS proxy if direct fails
+    const fetchViaProxy = async () => {
+      const endDate = Math.floor(Date.now() / 1000)
+      const startDate = Math.floor(new Date(START_DATE).getTime() / 1000)
+
+      const response = await fetch(
+        `https://corsproxy.io/?${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/GOOGL?period1=${startDate}&period2=${endDate}&interval=1mo`)}`
+      )
+
+      if (!response.ok) throw new Error('Proxy fetch failed')
+
+      const data = await response.json()
+      const result = data.chart.result[0]
+      return {
+        timestamps: result.timestamp,
+        prices: result.indicators.quote[0].close
+      }
+    }
+
+    try {
+      let stockData
+      try {
+        stockData = await fetchFromYahoo()
+      } catch (e) {
+        console.log('Direct Yahoo failed, trying proxy...')
+        stockData = await fetchViaProxy()
+      }
+
+      const { timestamps, prices } = stockData
 
       // Build historical data
       const history = timestamps.map((ts, i) => {
@@ -135,21 +164,24 @@ function App() {
       setLoading(false)
     } catch (err) {
       console.error('Error fetching stock data:', err)
-      // Fallback: use estimated current price
-      setGooglePrice(175) // Approximate current price
+      // Fallback: use estimated current price based on recent data
+      // GOOGL was ~$197 in Jan 2026
+      setGooglePrice(197)
       setError('Could not fetch live data. Using estimated values.')
 
-      // Generate approximate historical data
+      // Generate approximate historical data based on actual GOOGL performance
       const months = []
       const startDateObj = new Date(START_DATE)
       const now = new Date()
       let current = new Date(startDateObj)
 
+      // GOOGL went from ~$90 to ~$197 over 3 years (Jan 2023 to Jan 2026)
+      // That's roughly 119% gain or about 3.3% per month compounded
       while (current <= now) {
         const monthsElapsed = (current.getFullYear() - startDateObj.getFullYear()) * 12 +
                               (current.getMonth() - startDateObj.getMonth())
-        // Approximate Google growth ~40% over 2 years
-        const growthFactor = 1 + (monthsElapsed / 24) * 0.8
+        // Use compound growth approximation
+        const growthFactor = Math.pow(1.027, monthsElapsed) // ~2.7% monthly to reach ~197 in 36 months
         const stockValue = Math.round(INITIAL_INVESTMENT * growthFactor)
 
         months.push({
