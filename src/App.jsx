@@ -10,7 +10,7 @@ const GOOGLE_START_PRICE = 88.73
 // Bitcoin investment details
 const BTC_INVESTMENT = 1000
 const BTC_INVESTMENT_DATE = '2025-08-15'
-const BTC_PRICE_AUG_2025 = 59000 // Approximate BTC price on Aug 15, 2025
+const BTC_PRICE_AUG_2025 = 117384.44 // BTC price on Aug 15, 2025
 
 const initialVentures = [
   { id: 1, name: 'Rarely open coffee cart', revenue: 0, expenses: 'Time wasted' },
